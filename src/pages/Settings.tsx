@@ -5,6 +5,7 @@ import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/context/ToastContext';
 import { initials } from '@/lib/utils';
 import * as authService from '@/services/authService';
+import { applyAccent, getStoredAccent, type AccentKey } from '@/lib/theme';
 
 const roleLabels: Record<string, string> = {
   administrator: 'Administrator', hospital: 'Hospital Staff', health_authority: 'Health Authority',
@@ -16,11 +17,11 @@ export default function Settings() {
   const [name, setName] = useState(user?.name ?? '');
   const [email, setEmail] = useState(user?.email ?? '');
   const [darkMode, setDarkMode] = useState(true);
-  const [accent, setAccent] = useState<'teal' | 'blue' | 'amber'>('teal');
+  const [accent, setAccent] = useState<AccentKey>(getStoredAccent());
   const [notifications, setNotifications] = useState({
     highRisk: true, weeklyDigest: true, stewardshipReminders: false, systemUpdates: true,
   });
-  const [openaiKey, setOpenaiKey] = useState('');
+  const liveAIEnabled = Boolean(import.meta.env.VITE_OPENAI_API_KEY);
   const [saving, setSaving] = useState(false);
   const [profileError, setProfileError] = useState('');
 
@@ -60,11 +61,6 @@ export default function Settings() {
     } finally {
       setChangingPassword(false);
     }
-  }
-
-  function handleSaveKeys(e: React.FormEvent) {
-    e.preventDefault();
-    show('API key saved locally for this session. Add it to your .env as VITE_OPENAI_API_KEY to persist it.', 'info');
   }
 
   return (
@@ -160,7 +156,7 @@ export default function Settings() {
               ] as const).map(({ key, color }) => (
                 <button
                   key={key}
-                  onClick={() => setAccent(key)}
+                  onClick={() => { setAccent(key); applyAccent(key); show(`Accent color changed to ${key}.`, 'success'); }}
                   className="w-9 h-9 rounded-full border-2 transition-transform"
                   style={{ backgroundColor: color, borderColor: accent === key ? '#fff' : 'transparent', transform: accent === key ? 'scale(1.1)' : 'scale(1)' }}
                   aria-label={`Use ${key} accent`}
@@ -202,19 +198,31 @@ export default function Settings() {
       <Card>
         <div className="flex items-center gap-2 mb-4">
           <KeyRound size={17} className="text-[var(--color-culture)]" />
-          <h2 className="font-display font-semibold">API Keys</h2>
+          <h2 className="font-display font-semibold">AI Assistant Configuration</h2>
         </div>
-        <form onSubmit={handleSaveKeys} className="space-y-4">
-          <div>
-            <Label>OpenAI API key (optional)</Label>
-            <Input type="password" placeholder="sk-…" value={openaiKey} onChange={(e) => setOpenaiKey(e.target.value)} />
-            <p className="text-xs text-[var(--color-text-faint)] mt-1.5">
-              The AI Assistant runs fully offline on your dashboard data by default. Add a key here (or set{' '}
-              <code className="font-mono">VITE_OPENAI_API_KEY</code> in <code className="font-mono">.env</code>) to route insights through the live OpenAI API instead.
+        <div className="flex items-center gap-3 rounded-xl border border-[var(--color-border)] px-4 py-3.5">
+          <span
+            className="w-2.5 h-2.5 rounded-full shrink-0"
+            style={{ backgroundColor: liveAIEnabled ? 'var(--color-culture)' : 'var(--color-caution)' }}
+          />
+          <div className="min-w-0">
+            <p className="text-sm font-medium">
+              {liveAIEnabled ? 'Live OpenAI API connected' : 'Running on offline data-derived insights'}
+            </p>
+            <p className="text-xs text-[var(--color-text-faint)] mt-0.5">
+              {liveAIEnabled
+                ? 'A VITE_OPENAI_API_KEY was found in this deployment\'s environment.'
+                : 'No API key configured — the AI Assistant generates insights directly from your dashboard data instead.'}
             </p>
           </div>
-          <Button type="submit" variant="secondary" icon={<Save size={15} />}>Save key</Button>
-        </form>
+        </div>
+        <p className="text-xs text-[var(--color-text-faint)] mt-3 leading-relaxed">
+          This isn't something visitors enter — it's set once by whoever deploys the app. To enable the
+          live OpenAI API, add <code className="font-mono">VITE_OPENAI_API_KEY=sk-…</code> to a{' '}
+          <code className="font-mono">.env</code> file locally, or under your hosting provider's
+          <span className="font-mono"> Environment Variables</span> settings (e.g. Vercel → Project → Settings
+          → Environment Variables) before deploying. No code changes needed.
+        </p>
       </Card>
     </div>
   );

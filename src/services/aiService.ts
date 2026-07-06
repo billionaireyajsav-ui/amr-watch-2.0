@@ -3,17 +3,11 @@ import type { Hospital, Patient, AIInsight } from '@/types';
 // ---------------------------------------------------------------------------
 // AI Assistant service.
 //
-// USE_LIVE_AI is false by default so the app runs with zero configuration.
-// Set VITE_OPENAI_API_KEY in a .env file and flip USE_LIVE_AI to true to call
-// the real OpenAI API instead — the prompt-construction helpers below are
-// already written so no other code changes are required.
-//
-// The fallback generator never invents clinical facts: every sentence it
-// produces is derived directly from the numbers passed in, and every insight
-// is labelled with `basedOnData: true`.
-// ---------------------------------------------------------------------------
-
-const USE_LIVE_AI = false;
+// USE_LIVE_AI turns on automatically the moment VITE_OPENAI_API_KEY is set in
+// your .env file (or as a Vercel/hosting environment variable) — nothing else
+// to flip in code. With no key set, it falls back to the offline generator
+// below so the app works with zero configuration.
+const USE_LIVE_AI = Boolean(import.meta.env.VITE_OPENAI_API_KEY);
 
 function delay<T>(value: T, ms = 900): Promise<T> {
   return new Promise((resolve) => setTimeout(() => resolve(value), ms));
