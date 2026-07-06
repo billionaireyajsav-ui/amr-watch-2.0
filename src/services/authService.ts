@@ -189,6 +189,38 @@ export async function changePassword(uid: string, currentPassword: string, newPa
   saveAccounts(accounts);
 }
 
+// ---------------------------------------------------------------------------
+// Administrator-driven account recovery.
+//
+// This mirrors how real organizations handle a forgotten password when no
+// live email service is connected: an Administrator looks up the account and
+// sets a new password directly, without needing to know the old one. The
+// person then signs in with that new password (and should change it again
+// from Settings once they're back in).
+// ---------------------------------------------------------------------------
+
+export interface AccountSummary {
+  uid: string;
+  name: string;
+  email: string;
+  role: Role;
+}
+
+export async function listAccounts(): Promise<AccountSummary[]> {
+  await delay(null, 300);
+  return loadAccounts().map((a) => ({ uid: a.user.uid, name: a.user.name, email: a.user.email, role: a.user.role }));
+}
+
+export async function adminResetPassword(targetUid: string, newPassword: string): Promise<void> {
+  await delay(null, 500);
+  if (newPassword.length < 6) throw new Error('New password must be at least 6 characters.');
+  const accounts = loadAccounts();
+  const idx = accounts.findIndex((a) => a.user.uid === targetUid);
+  if (idx === -1) throw new Error('Account not found.');
+  accounts[idx].password = newPassword;
+  saveAccounts(accounts);
+}
+
 export function getCurrentSession(): AppUser | null {
   const raw = localStorage.getItem(SESSION_KEY) ?? sessionStorage.getItem(SESSION_KEY);
   if (!raw) return null;

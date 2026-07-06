@@ -1,11 +1,12 @@
-import { useState } from 'react';
-import { User, Palette, Bell, KeyRound, Moon, Sun, Save, Lock } from 'lucide-react';
-import { Card, Button, Input, Label } from '@/components/ui/Primitives';
+import { useEffect, useState } from 'react';
+import { User, Palette, Bell, KeyRound, Moon, Sun, Save, Lock, Users, ShieldCheck } from 'lucide-react';
+import { Card, Button, Input, Label, Badge } from '@/components/ui/Primitives';
+import { Modal } from '@/components/ui/Modal';
 import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/context/ToastContext';
 import { initials } from '@/lib/utils';
 import * as authService from '@/services/authService';
-import { applyAccent, getStoredAccent, type AccentKey } from '@/lib/theme';
+import { applyAccent, getStoredAccent, applyDarkMode, getStoredDarkMode, type AccentKey } from '@/lib/theme';
 
 const roleLabels: Record<string, string> = {
   administrator: 'Administrator', hospital: 'Hospital Staff', health_authority: 'Health Authority',
@@ -16,7 +17,7 @@ export default function Settings() {
   const { show } = useToast();
   const [name, setName] = useState(user?.name ?? '');
   const [email, setEmail] = useState(user?.email ?? '');
-  const [darkMode, setDarkMode] = useState(true);
+  const [darkMode, setDarkMode] = useState(getStoredDarkMode());
   const [accent, setAccent] = useState<AccentKey>(getStoredAccent());
   const [notifications, setNotifications] = useState({
     highRisk: true, weeklyDigest: true, stewardshipReminders: false, systemUpdates: true,
@@ -29,6 +30,36 @@ export default function Settings() {
   const [newPassword, setNewPassword] = useState('');
   const [changingPassword, setChangingPassword] = useState(false);
   const [passwordError, setPasswordError] = useState('');
+
+  const isAdmin = user?.role === 'administrator';
+  const [accounts, setAccounts] = useState<authService.AccountSummary[]>([]);
+  const [resetTarget, setResetTarget] = useState<authService.AccountSummary | null>(null);
+  const [adminNewPassword, setAdminNewPassword] = useState('');
+  const [resettingPassword, setResettingPassword] = useState(false);
+  const [resetError, setResetError] = useState('');
+
+  useEffect(() => {
+    if (isAdmin) {
+      authService.listAccounts().then(setAccounts);
+    }
+  }, [isAdmin]);
+
+  async function handleAdminReset(e: React.FormEvent) {
+    e.preventDefault();
+    if (!resetTarget) return;
+    setResetError('');
+    setResettingPassword(true);
+    try {
+      await authService.adminResetPassword(resetTarget.uid, adminNewPassword);
+      show(`Password reset for ${resetTarget.name}. Share the new password with them securely.`, 'success');
+      setResetTarget(null);
+      setAdminNewPassword('');
+    } catch (err) {
+      setResetError(err instanceof Error ? err.message : 'Could not reset password.');
+    } finally {
+      setResettingPassword(false);
+    }
+  }
 
   async function handleSaveProfile(e: React.FormEvent) {
     e.preventDefault();
@@ -123,6 +154,40 @@ export default function Settings() {
         </form>
       </Card>
 
+      {isAdmin && (
+        <Card>
+          <div className="flex items-center gap-2 mb-1">
+            <Users size={17} className="text-[var(--color-culture)]" />
+            <h2 className="font-display font-semibold">User Management</h2>
+          </div>
+          <p className="text-xs text-[var(--color-text-muted)] mb-4">
+            As an Administrator, you can reset any user's password if they're locked out — this app has no
+            live email service, so this replaces the usual "forgot password" email link.
+          </p>
+          <div className="space-y-2">
+            {accounts.map((a) => (
+              <div key={a.uid} className="flex items-center justify-between gap-3 rounded-xl border border-[var(--color-border)] px-4 py-3">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <p className="text-sm font-medium truncate">{a.name}</p>
+                    {a.uid === user?.uid && <Badge color="var(--color-info)">You</Badge>}
+                  </div>
+                  <p className="text-xs text-[var(--color-text-faint)] truncate">{a.email} · {roleLabels[a.role]}</p>
+                </div>
+                <Button
+                  variant="secondary"
+                  className="shrink-0"
+                  icon={<ShieldCheck size={14} />}
+                  onClick={() => { setResetTarget(a); setAdminNewPassword(''); setResetError(''); }}
+                >
+                  Reset password
+                </Button>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
+
       <Card>
         <div className="flex items-center gap-2 mb-4">
           <Palette size={17} className="text-[var(--color-culture)]" />
@@ -135,7 +200,12 @@ export default function Settings() {
               <p className="text-xs text-[var(--color-text-faint)]">AMR Watch is designed dark-first for clinical night-shift use</p>
             </div>
             <button
-              onClick={() => setDarkMode((d) => !d)}
+              onClick={() => {
+                const next = !darkMode;
+                setDarkMode(next);
+                applyDarkMode(next);
+                show(next ? 'Dark mode enabled.' : 'Light mode enabled.', 'success');
+              }}
               className="w-12 h-7 rounded-full flex items-center px-1 transition-colors"
               style={{ backgroundColor: darkMode ? 'var(--color-culture)' : 'rgba(148,178,224,0.2)' }}
               aria-pressed={darkMode}
@@ -224,6 +294,26 @@ export default function Settings() {
           → Environment Variables) before deploying. No code changes needed.
         </p>
       </Card>
+
+      <Modal open={!!resetTarget} onClose={() => setResetTarget(null)} title="Reset user password" size="sm">
+        <p className="text-sm text-[var(--color-text-muted)] mb-4">
+          Setting a new password for <span className="text-[var(--color-text-primary)] font-medium">{resetTarget?.name}</span> ({resetTarget?.email}).
+          Share it with them directly and securely — they should change it again from Settings once signed in.
+        </p>
+        <form onSubmit={handleAdminReset} className="space-y-4">
+          <div>
+            <Label>New password</Label>
+            <Input type="text" value={adminNewPassword} onChange={(e) => setAdminNewPassword(e.target.value)} required placeholder="At least 6 characters" />
+          </div>
+          {resetError && (
+            <p className="text-sm text-[var(--color-hazard)] bg-[var(--color-hazard)]/10 rounded-lg px-3 py-2">{resetError}</p>
+          )}
+          <div className="flex justify-end gap-2">
+            <Button type="button" variant="secondary" onClick={() => setResetTarget(null)}>Cancel</Button>
+            <Button type="submit" loading={resettingPassword}>Reset password</Button>
+          </div>
+        </form>
+      </Modal>
     </div>
   );
 }

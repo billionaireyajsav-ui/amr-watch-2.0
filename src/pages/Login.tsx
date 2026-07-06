@@ -314,9 +314,10 @@ export default function Login() {
                 ) : (
                   <div className="text-center py-4">
                     <ShieldCheck size={32} className="text-[var(--color-culture)] mx-auto mb-3" />
-                    <h2 className="font-display font-semibold mb-1">Check your inbox</h2>
+                    <h2 className="font-display font-semibold mb-1">No live email in this demo</h2>
                     <p className="text-sm text-[var(--color-text-muted)] mb-5">
-                      If an account exists for {resetEmail}, a reset link is on its way.
+                      This hackathon build isn't connected to a real email service, so no link was actually sent to {resetEmail}.
+                      Ask an Administrator to reset your password from Settings → User Management instead.
                     </p>
                     <Button variant="secondary" onClick={() => { switchMode('signin'); setResetSent(false); }} className="w-full">
                       Back to sign in
