@@ -4,8 +4,9 @@ import { Search, Plus, Pencil, Trash2, Eye, ChevronLeft, ChevronRight, Building2
 import { Card, Button, Input, Select, Badge, EmptyState, Skeleton } from '@/components/ui/Primitives';
 import { Modal } from '@/components/ui/Modal';
 import * as dataService from '@/services/dataService';
-import type { Hospital, RiskLevel } from '@/types';
+import type { Hospital, Patient, RiskLevel } from '@/types';
 import { riskColor, riskLabel } from '@/lib/utils';
+import { computeAllStewardshipMetrics, stewardshipRiskLevel } from '@/lib/stewardship';
 import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/context/ToastContext';
 
@@ -23,6 +24,7 @@ export default function Hospitals() {
   const canEdit = hasAccess(['administrator']);
 
   const [hospitals, setHospitals] = useState<Hospital[]>([]);
+  const [patients, setPatients] = useState<Patient[]>([]);
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState('');
   const [riskFilter, setRiskFilter] = useState<'all' | RiskLevel>('all');
@@ -37,12 +39,18 @@ export default function Hospitals() {
 
   async function load() {
     setLoading(true);
-    const data = await dataService.listHospitals();
-    setHospitals(data);
+    const [hospitalData, patientData] = await Promise.all([dataService.listHospitals(), dataService.listPatients()]);
+    setHospitals(hospitalData);
+    setPatients(patientData);
     setLoading(false);
   }
 
   useEffect(() => { load(); }, []);
+
+  const stewardshipByHospital = useMemo(
+    () => computeAllStewardshipMetrics(hospitals.map((h) => h.id), patients),
+    [hospitals, patients]
+  );
 
   const districts = useMemo(() => Array.from(new Set(hospitals.map((h) => h.district))).sort(), [hospitals]);
 
@@ -144,6 +152,7 @@ export default function Hospitals() {
                     <th className="px-5 py-3 font-medium">AMR Score</th>
                     <th className="px-5 py-3 font-medium">Risk</th>
                     <th className="px-5 py-3 font-medium">Patients</th>
+                    <th className="px-5 py-3 font-medium">Stewardship Failures</th>
                     <th className="px-5 py-3 font-medium text-right">Actions</th>
                   </tr>
                 </thead>
@@ -158,6 +167,21 @@ export default function Hospitals() {
                       <td className="px-5 py-3.5 font-mono tabular-nums">{h.amrScore}</td>
                       <td className="px-5 py-3.5"><Badge color={riskColor[h.riskLevel]}>{riskLabel[h.riskLevel]}</Badge></td>
                       <td className="px-5 py-3.5 tabular-nums">{h.patients}</td>
+                      <td className="px-5 py-3.5">
+                        {(() => {
+                          const m = stewardshipByHospital.get(h.id);
+                          if (!m || m.identifiedCases === 0) {
+                            return <span className="text-xs text-[var(--color-text-faint)]">No identified cases</span>;
+                          }
+                          const risk = stewardshipRiskLevel(m.failureRate);
+                          return (
+                            <div className="flex items-center gap-2">
+                              <Badge color={riskColor[risk]}>{m.failureRate}%</Badge>
+                              <span className="text-xs text-[var(--color-text-faint)]">{m.failures}/{m.identifiedCases} cases</span>
+                            </div>
+                          );
+                        })()}
+                      </td>
                       <td className="px-5 py-3.5">
                         <div className="flex items-center justify-end gap-1">
                           <Link to={`/hospitals/${h.id}`} className="p-1.5 rounded-lg text-[var(--color-text-muted)] hover:text-[var(--color-culture)] hover:bg-white/5" aria-label={`View ${h.name}`}>

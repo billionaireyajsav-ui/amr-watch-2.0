@@ -9,6 +9,7 @@ import * as aiService from '@/services/aiService';
 import { generateHospitalReportPDF } from '@/services/pdfService';
 import type { Hospital, Patient, AIInsight } from '@/types';
 import { riskColor, riskLabel } from '@/lib/utils';
+import { computeStewardshipMetrics, stewardshipRiskLevel } from '@/lib/stewardship';
 import { useToast } from '@/context/ToastContext';
 
 export default function HospitalProfile() {
@@ -66,8 +67,8 @@ export default function HospitalProfile() {
   }
 
   const hospitalPatients = patients;
-  const switched = hospitalPatients.filter((p) => p.treatmentChanged).length;
-  const switchPct = hospitalPatients.length ? Math.round((switched / hospitalPatients.length) * 100) : 0;
+  const metrics = hospital ? computeStewardshipMetrics(hospital.id, patients) : null;
+  const stewardshipRisk = metrics ? stewardshipRiskLevel(metrics.failureRate) : 'low';
 
   return (
     <div className="space-y-6">
@@ -98,7 +99,15 @@ export default function HospitalProfile() {
         <Card className="flex items-center gap-3"><Users size={18} className="text-[var(--color-info)]" /><div><p className="font-display font-bold">{hospital.patients}</p><p className="text-xs text-[var(--color-text-muted)]">Patients</p></div></Card>
         <Card className="flex items-center gap-3"><BedDouble size={18} className="text-[var(--color-culture)]" /><div><p className="font-display font-bold">{hospital.bedCount}</p><p className="text-xs text-[var(--color-text-muted)]">Beds</p></div></Card>
         <Card className="flex items-center gap-3"><FlaskConical size={18} className="text-[var(--color-caution)]" /><div><p className="font-display font-bold">{hospital.labConfirmationRate}%</p><p className="text-xs text-[var(--color-text-muted)]">Lab confirmation</p></div></Card>
-        <Card className="flex items-center gap-3"><Sparkles size={18} className="text-[var(--color-hazard)]" /><div><p className="font-display font-bold">{switchPct}%</p><p className="text-xs text-[var(--color-text-muted)]">Antibiotic switch rate</p></div></Card>
+        <Card className="flex items-center gap-3">
+          <Sparkles size={18} style={{ color: riskColor[stewardshipRisk] }} />
+          <div>
+            <p className="font-display font-bold" style={{ color: riskColor[stewardshipRisk] }}>
+              {metrics!.failureRate}%
+            </p>
+            <p className="text-xs text-[var(--color-text-muted)]">Stewardship failure rate</p>
+          </div>
+        </Card>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -129,6 +138,39 @@ export default function HospitalProfile() {
           </ResponsiveContainer>
         </Card>
       </div>
+
+      <Card>
+        <div className="flex items-center justify-between mb-3">
+          <div>
+            <h3 className="font-display font-semibold">Stewardship Failure Analysis</h3>
+            <p className="text-xs text-[var(--color-text-muted)] mt-0.5">
+              Computed live from this hospital's patient records — not a static score.
+            </p>
+          </div>
+          <Badge color={riskColor[stewardshipRisk]}>{riskLabel[stewardshipRisk]}</Badge>
+        </div>
+        <div className="grid grid-cols-3 gap-3 mb-4">
+          <div className="rounded-xl border border-[var(--color-border)] p-3.5 text-center">
+            <p className="font-display text-xl font-bold">{metrics!.identifiedCases}</p>
+            <p className="text-xs text-[var(--color-text-faint)] mt-1">Bacterium identified</p>
+          </div>
+          <div className="rounded-xl border border-[var(--color-border)] p-3.5 text-center">
+            <p className="font-display text-xl font-bold" style={{ color: riskColor[stewardshipRisk] }}>{metrics!.failures}</p>
+            <p className="text-xs text-[var(--color-text-faint)] mt-1">Stayed on broad-spectrum</p>
+          </div>
+          <div className="rounded-xl border border-[var(--color-border)] p-3.5 text-center">
+            <p className="font-display text-xl font-bold" style={{ color: riskColor[stewardshipRisk] }}>{metrics!.failureRate}%</p>
+            <p className="text-xs text-[var(--color-text-faint)] mt-1">Failure rate</p>
+          </div>
+        </div>
+        <p className="text-xs text-[var(--color-text-muted)] leading-relaxed">
+          Out of <strong className="text-[var(--color-text-primary)]">{metrics!.identifiedCases}</strong> patients where
+          lab testing identified the exact bacterium, <strong className="text-[var(--color-text-primary)]">{metrics!.failures}</strong> were
+          kept on a broad-spectrum antibiotic instead of switching to a targeted narrow-spectrum drug — the core stewardship
+          failure pattern that accelerates antimicrobial resistance. This recalculates immediately whenever patient records
+          for this hospital are added, edited, or removed.
+        </p>
+      </Card>
 
       <Card>
         <div className="flex items-center justify-between mb-3">
