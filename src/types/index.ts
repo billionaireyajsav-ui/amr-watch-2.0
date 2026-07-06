@@ -62,7 +62,8 @@ export type AlertType =
   | 'Excessive broad-spectrum use'
   | 'Declining AMR score'
   | 'High-risk hospital'
-  | 'Missing lab confirmation';
+  | 'Missing lab confirmation'
+  | 'Stewardship failure after diagnosis';
 
 export type AlertSeverity = 'info' | 'warning' | 'critical';
 
